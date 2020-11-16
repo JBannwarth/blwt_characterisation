@@ -3,6 +3,8 @@
 %   Last modified: 2019/08/01, by J.X.J. Bannwarth
 
 %% Load data and compute stats
+clearvars;
+clc
 folderIn = 'data';
 files = dir( folderIn );
 
@@ -32,6 +34,35 @@ for i = 1:length(namesNoExt)
     C{1} = erase( C{1}, 'grid' );
     T = [T; [fileNames{i}, C, Umean(1), Uti(1), Uti(2), Uti(3), Settings.Pbaro/100, Settings.Tmean, Settings.FirstSampleDate, Settings.FirstSampleTime, Settings.DataRate, Settings.DeviceID]];
 end
+
+%% Plot PSD
+L1u = 5.67*1.5;
+f = logspace(-2,2,501);
+for i = 1:length(windData)
+    Umean(i,1) = mean(windData(i).U);
+    Ustd(i,1) = std(windData(i).U,1);
+end
+for i = 1:length(windData)
+    [windData(i).p,windData(i).f] = pwelch( windData(i).U-mean(windData(i).U), ...
+        hann(1024, 'periodic'), [], f, Settings.DataRate );
+end
+
+cMap = lines();
+figure
+hold on; grid on; box on
+dataInt = 5;
+for i = 1:length(windData)
+    plot( windData(i).f(1:dataInt:end), ...
+        windData(i).p(1:dataInt:end).*windData(i).f(1:dataInt:end)/Umean(i)^2, ...
+        '-', 'Color', cMap(i,:) )
+    SNorm = CalcVonKarmanIEC( f, [L1u L1u L1u], Umean(i) );
+    plot( f, SNorm(:,1), '--', 'color', cMap(i,:) )
+end
+
+xlabel('Frequency, $f$ [Hz]')
+ylabel('Normalised spectrum $fS_U/U_{mean}^2$ [-]')
+set(gca,'XScale','log','YScale','log')
+SetFigProp( [15,10], 11 )
 
 %% Plot results
 set(groot,'defaulttextinterpreter','latex'); % necessary to avoid warnings
