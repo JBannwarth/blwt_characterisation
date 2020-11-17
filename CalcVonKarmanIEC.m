@@ -1,11 +1,10 @@
-function SNorm = CalcVonKarmanIEC( n, L, U )
+function SNorm = CalcVonKarmanIEC( n, U )
 %CALCVONKARMANIEC Calculate normalised Von Karman model
 %   Based on equations from:
 %       T. Burton, N. Jenkins, D. Sharpe, and E. Bossanyi, "Wind Energy
 %       Handbook (2nd Edition)," John Wiley & Sons, 2011, pp. 9-21.
 %   Inputs:
 %       - n: frequencies to compute the spectrum at (Hz)
-%       - L: characteristic length (m)
 %       - U: mean wind speed (m/s)
 %   Outputs:
 %   Written by:  Z.J. Chen, 2017
@@ -26,14 +25,16 @@ eta = 1 - 6*fCor*z/uFric;
 p = eta^16;
 
 h = uFric / (6*fCor);
-% Standard deviation of longitudinal component (7.5 should be 75 according
-% to textbook)
+% Standard deviation of longitudinal component
 stdU = (75*eta*(0.538 + 0.09*log(z/z0))^p*uFric) / (1+0.156*log(uFric/fCor*z0));
+
+% Standard deviation of the other two components
 stdV = stdU*(1-0.22*cos(pi*z/(2*h))^4);
 stdW = stdU*(1-0.45*cos(pi*z/(2*h))^4);
 
 % Return normalised von Karman spectrum - Change normalisation?
-SNorm = zeros(length(n),3);
+SNorm = zeros( length(n), 3 );
+L = zeros( 3, 1 );
 for i = 1:3
     if (i == 1)
         L(i) = 280*(z/zi)^0.35;
