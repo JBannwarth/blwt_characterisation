@@ -1,4 +1,4 @@
-function SNorm = CalcVonKarmanIEC( n, U )
+function SNorm = CalcVonKarmanIEC( n, U, z, normalise )
 %CALCVONKARMANIEC Calculate normalised Von Karman model
 %   Based on equations from:
 %       T. Burton, N. Jenkins, D. Sharpe, and E. Bossanyi, "Wind Energy
@@ -6,14 +6,17 @@ function SNorm = CalcVonKarmanIEC( n, U )
 %   Inputs:
 %       - n: frequencies to compute the spectrum at (Hz)
 %       - U: mean wind speed (m/s)
+%       - z: height above the ground (m)
+%       - nomalise: whether to normalise the PSD by the frequency n
 %   Outputs:
+%       - SNorm: power spectral density, nomalised by mean wind speed U and
+%                (optionally) by frequency n
 %   Written by:  Z.J. Chen, 2017
-%   Modified by: J.X.J. Bannwarth, 2018
+%   Modified by: J.X.J. Bannwarth, 2020/11/17
 
 % Default parameters for countryside with trees and hedges
 z0          = 0.1;            % (m) surface roughness length 
 zi          = 1000*z0^0.18;   % (m) min height for isotropic turbulence
-z           = 1.5;            % (m) height above ground
 angVelEarth = 7.2921159e-5;   % (rad/s) angular rotation speed of earth
 latAkl      = 36.8485*pi/180; % (rad) latitude of Auckland
 kappa       = 0.4;            % (-) von Karman constant
@@ -26,11 +29,12 @@ p = eta^16;
 
 h = uFric / (6*fCor);
 % Standard deviation of longitudinal component
-stdU = (75*eta*(0.538 + 0.09*log(z/z0))^p*uFric) / (1+0.156*log(uFric/fCor*z0));
+stdU = ( 7.5*eta*(0.538 + 0.09*log(z/z0))^p*uFric ) / ...
+    ( 1 + 0.156*log(uFric/fCor*z0) );
 
 % Standard deviation of the other two components
-stdV = stdU*(1-0.22*cos(pi*z/(2*h))^4);
-stdW = stdU*(1-0.45*cos(pi*z/(2*h))^4);
+stdV = stdU * ( 1 - 0.22*cos(pi*z/(2*h))^4 );
+stdW = stdU * ( 1 - 0.45*cos(pi*z/(2*h))^4 );
 
 % Return normalised von Karman spectrum - Change normalisation?
 SNorm = zeros( length(n), 3 );
@@ -49,6 +53,9 @@ for i = 1:3
         SNorm(:,i) = (4*(n*L(i)/U).*(1+755.2*(n*L(i)/U).^2))./(1+283.2*(n*L(i)/U).^2).^(11/6);
         stdWind = stdW;
     end
-    SNorm(:,i) = SNorm(:,i)*stdWind^2/U^2;
+    SNorm(:,i) = SNorm(:,i)*stdWind^2 ./ (U^2);
+    if ~normalise
+        SNorm(:,i) = SNorm(:,i) ./ n';
+    end
 end
 return
