@@ -106,7 +106,11 @@ for ii = 1:length(locations)
         hAx(ii,jj) = subplot( 2, 2, jj );
         hold on; grid on; box on;
         xlabel( 'Frequency, $f$ (Hz)' )
-        ylabel( '$fS_U/U_\mathrm{mean}^2$ (-)' )
+        if normalisePSD
+            ylabel( '$fS_U/U_\mathrm{mean}^2$ (-)' )
+        else
+            ylabel( '$S_U/U_\mathrm{mean}^2$ (-)' )
+        end
         xlim( [1E-2 1E2] )
         ylim( [1E-8 1E2] )
         title( sprintf( '$h$ = %.2f m', heights(jj) ) )
