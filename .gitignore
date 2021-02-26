@@ -1,3 +1,4 @@
 *.pdf
 *.asv
 *.mat
+turbsim/*
