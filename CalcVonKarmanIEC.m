@@ -1,4 +1,4 @@
-function SNorm = CalcVonKarmanIEC( n, U, z, normalise )
+function SNorm = CalcVonKarmanIEC( n, U, z, normalise, L )
 %CALCVONKARMANIEC Calculate normalised Von Karman model
 %   Based on equations from:
 %       [1] T. Burton, N. Jenkins, D. Sharpe, and E. Bossanyi, "Wind Energy
@@ -7,59 +7,83 @@ function SNorm = CalcVonKarmanIEC( n, U, z, normalise )
 %       Ground. Part II: Single Point Data For Strong Winds (Neutral
 %       Atmosphere). ESDU 85020. London: Engineering Science Data Unit.
 %   Inputs:
-%       - n: frequencies to compute the spectrum at (Hz)
-%       - U: mean wind speed (m/s)
-%       - z: height above the ground (m)
+%       - n:        frequencies to compute the spectrum at (Hz)
+%       - U:        mean wind speed (m/s)
+%       - z:        height above the ground (m)
 %       - nomalise: whether to normalise the PSD by the frequency n
+%       - L:        overriding length scale (not used by default)
 %   Outputs:
 %       - SNorm: power spectral density, nomalised by mean wind speed U and
 %                (optionally) by frequency n
 %   Written by:  Z.J. Chen, 2017
 %   Modified by: J.X.J. Bannwarth, 2020/11/17
 
-% Default parameters for countryside with trees and hedges
-z0          = 0.1;            % (m) surface roughness length 
-zi          = 1000*z0^0.18;   % (m) min height for isotropic turbulence
-angVelEarth = 7.2921159e-5;   % (rad/s) angular rotation speed of earth
-latAkl      = 36.8485*pi/180; % (rad) latitude of Auckland
-kappa       = 0.4;            % (-) von Karman constant
-
-% Turbulence intensity
-fCor = 2 * angVelEarth * sin( abs(latAkl) ); % (rad/s) Coriolis parameter
-uFric = (kappa*U - 34.5*fCor*z) / log(z/z0); % (m/s) friction velocity
-eta = 1 - 6*fCor*z/uFric;
-p = eta^16;
-
-h = uFric / (6*fCor);
-% Standard deviation of longitudinal component
-% Note: Equation in [1] contains errors, using that from [2] instead
-stdU = ( 7.5*eta*(0.538 + 0.09*log(z/z0))^p*uFric ) / ...
-    ( 1 + 0.156*log( uFric / (fCor*z0) ) );
-
-% Standard deviation of the other two components
-stdV = stdU * ( 1 - 0.22*cos(pi*z/(2*h))^4 );
-stdW = stdU * ( 1 - 0.45*cos(pi*z/(2*h))^4 );
-
-% Return normalised von Karman spectrum
-SNorm = zeros( length(n), 3 );
-L = zeros( 3, 1 );
-for i = 1:3
-    if (i == 1)
-        L(i) = 280*(z/zi)^0.35;
-        SNorm(:,i) = (4*n*L(i)/U) ./ (1+70.8*(n*L(i)/U).^2).^(5/6);
-        stdWind = stdU;
-    elseif (i == 2)
-        L(i) = 140*(z/zi)^0.48;
-        SNorm(:,i) = (4*(n*L(i)/U).*(1+755.2*(n*L(i)/U).^2)) ./ (1+283.2*(n*L(i)/U).^2).^(11/6);
-        stdWind = stdV;
-    elseif (i == 3)
-        L(i) = 0.35*z;
-        SNorm(:,i) = (4*(n*L(i)/U).*(1+755.2*(n*L(i)/U).^2)) ./ (1+283.2*(n*L(i)/U).^2).^(11/6);
-        stdWind = stdW;
+    arguments
+        n         (1,:) double
+        U         (1,1) double
+        z         (1,1) double
+        normalise (1,1) logical = true
+        L         (3,1) double  = [-1, -1, -1]
     end
-    SNorm(:,i) = SNorm(:,i)*stdWind^2 ./ (U^2);
-    if ~normalise
-        SNorm(:,i) = SNorm(:,i) ./ n';
+
+    % Default parameters for countryside with trees and hedges
+    z0          = 0.1;            % (m) surface roughness length 
+    zi          = 1000*z0^0.18;   % (m) min height for isotropic turbulence
+    angVelEarth = 7.2921159e-5;   % (rad/s) angular rotation speed of earth
+    latAkl      = 36.8485*pi/180; % (rad) latitude of Auckland
+    kappa       = 0.4;            % (-) von Karman constant
+
+    % Turbulence intensity
+    fCor = 2 * angVelEarth * sin( abs(latAkl) ); % (rad/s) Coriolis parameter
+    uFric = (kappa*U - 34.5*fCor*z) / log(z/z0); % (m/s) friction velocity
+    eta = 1 - 6*fCor*z/uFric;
+    p = eta^16;
+
+    h = uFric / (6*fCor);
+    % Standard deviation of longitudinal component
+    % Note: Equation in [1] contains errors, using that from [2] instead
+    stdU = ( 7.5*eta*(0.538 + 0.09*log(z/z0))^p*uFric ) / ...
+        ( 1 + 0.156*log( uFric / (fCor*z0) ) );
+
+    % Standard deviation of the other two components
+    stdV = stdU * ( 1 - 0.22*cos(pi*z/(2*h))^4 );
+    stdW = stdU * ( 1 - 0.45*cos(pi*z/(2*h))^4 );
+
+    % Return normalised von Karman spectrum
+    SNorm = zeros( length(n), 3 );
+    for ii = 1:3
+        % Compute length scale if required
+        if L(ii) == -1
+            switch ii
+                case 1
+                    L(ii) = 280*(z/zi)^0.35;
+                case 2
+                    L(ii) = 140*(z/zi)^0.48;
+                case 3
+                    L(ii) = 0.35*z;
+            end
+        end
+        
+        % Compute normalized spectrum
+        switch ii
+            case 1
+                SNorm(:,ii) = (4*n*L(ii)/U) ./ (1+70.8*(n*L(ii)/U).^2).^(5/6);
+                stdWind = stdU;
+            case 2
+                SNorm(:,ii) = (4*(n*L(ii)/U).*(1+755.2*(n*L(ii)/U).^2)) ...
+                    ./ (1+283.2*(n*L(ii)/U).^2).^(11/6);
+                stdWind = stdV;
+            case 3
+                SNorm(:,ii) = (4*(n*L(ii)/U).*(1+755.2*(n*L(ii)/U).^2)) ...
+                    ./ (1+283.2*(n*L(ii)/U).^2).^(11/6);
+                stdWind = stdW;
+        end
+        
+        SNorm(:,ii) = SNorm(:,ii)*stdWind^2 ./ (U^2);
+        
+        % Remove frequency-nomalisation if needed
+        if ~normalise
+            SNorm(:,ii) = SNorm(:,ii) ./ n';
+        end
     end
-end
 return
