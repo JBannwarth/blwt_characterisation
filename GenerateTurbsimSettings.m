@@ -8,17 +8,26 @@
 
 %% Load data and compute necessary values
 clearvars; clc
-folderIn = 'data';
+folderIn  = 'data';
+folderOut = 'turbsim';
+templateFile = 'turbsim_input_blank.inp';
+seedFile = 'turbsim_seeds.mat';
+batchFile = 'batch_run.bat';
+regenSeed = false;
 
 % Get files
 files = dir( fullfile( folderIn, 'coarsegrid_center_*_2.thA' ) );
 fileNames = {files.name}';
-fileNames = fileNames( endsWith( fileNames, '.thA' ) );
 namesNoExt = erase( fileNames, '.thA' );
+inputSettings = split( namesNoExt, '_' );
+inputSettings = cellfun( @(x)(str2double(x)), inputSettings(:,3) );
 
 UMean = zeros( length(namesNoExt), 3 );
-UStd = UMean;
-UTi = UMean;
+UStd  = UMean;
+UTi   = UMean;
+Li    = zeros( length(namesNoExt), 1 );
+turbScaleParam = zeros( length(namesNoExt), 1 );
+hubHeight      = zeros( length(namesNoExt), 1 );
 for ii = 1:length(namesNoExt)
     % Load data from file
     [ u, v, w, Ps, Settings ] = ReadTHFile( fullfile( folderIn, fileNames{ii}) );
@@ -26,24 +35,18 @@ for ii = 1:length(namesNoExt)
     % Fix misalignments
     [ u, v, w ] = ConditionWindSpeed( u, v, w, Settings.DataRate );
     
-    % Write to struct
-    windData(ii).U = u;
-    windData(ii).V = v;
-    windData(ii).W = w;
-    windData(ii).Ps = Ps;
-    
     % Statistics
     U = [u v w];
     UMean(ii,:) = mean(U);
     UStd(ii,:) = std(U);
     UTi(ii,:) = 100.* UStd(ii,:) ./ UMean(ii,1);
-    
-    % Compute hub height
-    fs = Settings.DataRate;
-    ts = 1 / fs;
     UZeroed = U - UMean(ii,:);
     
-    %
+    % Sampling parameters
+    fs = Settings.DataRate;
+    ts = 1 / fs;
+    
+    % Calculate double-sided spectrum using FFT
     L = size( UZeroed, 1);
     Y = fft( UZeroed, L, 1);
     f = ( 0:(fs/L):(fs/2-fs/L) )';
@@ -93,13 +96,31 @@ UStdRatio = UStd ./ UStd(:,1);
 nWsp      = length( UMean );
 nTurbSeed = 6;
 UStdNorm = zeros( size(UStdRatio,1)*nTurbSeed, 3 );
-for ii = 1:nTurbSeed
-    UStdNorm = [ UStdNorm; repmat(UStdRatio, nTurbSeed, 1) ];
+for ii = 1:nWsp
+    UStdNorm((1+(ii-1)*nTurbSeed):(ii*nTurbSeed), :) = repmat( ...
+        UStdRatio(ii,:), nTurbSeed, 1);
 end
 
 % Other parameters
 usableTime = 700;
 timeStep = 0.0008;
+
+% Save seeds for reproducibility          
+if ~isfolder( folderOut )
+    mkdir( folderOut )
+end
+
+if ~isfile( fullfile( folderOut, seedFile ) ) || regenSeed
+    seedNb = randi( [-2147483648, 2147483647], nWsp, nTurbSeed );
+    save( fullfile( folderOut, seedFile ), 'seedNb')
+else
+    load( fullfile( folderOut, seedFile ), 'seedNb' )
+end
+
+%% Generate input files
+% Read in template
+templateStr = fileread( templateFile );
+
 % Parameter list
 paramName = { '[Seed]';
               '[TimeStep]';
@@ -108,55 +129,44 @@ paramName = { '[Seed]';
               '[MeanWind]';
               '[UsableTime]' };
 
-if ~exist( fullfile( tmpFolder, 'turbSimSeeds.mat' ), 'dir' ) || regenSeed
-    seedNo = randi([-2147483648,2147483647], nWsp, nTurbSeed);
-    save( fullfile( tmpFolder, 'turbSimSeeds.mat' ), 'seedNo')
-else
-    load( fullfile( tmpFolder, 'turbSimSeeds.mat' ) )
-end
-
-%% GENERATE INPUT FILES
-% Read in template
-fid = fopen( fullfile( turbSimFolder, outputFolder, 'TurbSimInputFileBlank.inp' ), 'r' );
-n = 1;
-while ~feof(fid)
-    try
-    data{n, 1} = fgetl(fid);
-    catch
-    end
-    n = n + 1;
-end
-fclose(fid);
-
-% Write TurbSim input files
-n = 1;
-fileName{nWsp*nTurbSeed,1} = '';
-for ii=1:nWsp
-    for j=1:nTurbSeed
-        fileName{n} = sprintf( 'TurbSim_%02d_%02d.inp', tfwt(ii), j );
-        fid = fopen( fullfile( turbSimFolder, outputFolder, fileName{n} ), 'w' );
-        paramString = { sprintf('%d',seedNo(ii,j) );
-            sprintf( '%.4f', timeStep );
+% Format input files
+fileStr = cell( nWsp, nTurbSeed );
+fileName = cell( nWsp, nTurbSeed );
+for ii = 1:nWsp
+    for jj = 1:nTurbSeed
+        % File name
+        fileName{ii,jj} = sprintf( 'turbsim_%02d_%02d.inp', ...
+            inputSettings(ii), jj );
+        
+        % Modify template
+        paramStr = { ...
+            sprintf( '%d'  , seedNb(ii,jj) );
+            sprintf( '%.4f', timeStep      );
             sprintf( '%.8f', hubHeight(ii) );
-            sprintf( '%.2f', windTI(ii) );
-            sprintf( '%.2f', windAvg(ii) );
-            sprintf( '%d',   usableTime) };
-        for k = 1:length(data)
-            tempData = data{k};
-            for m = 1:length(paramName)
-                tempData = strrep( tempData, paramName{m}, paramString{m} );
-            end
-            fprintf( fid, '%s\n', tempData );
-        end
-        fclose( fid );
-        n = n + 1;
+            sprintf( '%.2f', UTi(ii)       );
+            sprintf( '%.2f', UMean(ii)     );
+            sprintf( '%d'  , usableTime    ) };
+        
+        fileStr{ii,jj} = replace( templateStr, paramName, paramStr );
     end
 end
-save( fullfile( tmpFolder, 'turbSimFileNames.mat' ), 'fileName', 'windStdNorm' )
 
-%% GENERATE BATCH RUN FILE
-fid = fopen( fullfile( turbSimFolder, outputFolder, 'batchRun.bat' ), 'w' );
-for ii=1:length(fileName)
-    fprintf( fid, '.\\TurbSim .\\%s\\%s\n', outputFolder, fileName{ii} );
+% Clear output folder
+delete( fullfile( folderOut, '*.inp' ) )
+
+% Write to input files
+for ii = 1:nWsp
+    for jj = 1:nTurbSeed
+        fid = fopen( fullfile( folderOut, fileName{ii,jj}), 'w' );
+        fprintf( fid, '%s', fileStr{ii,jj} );
+        fclose( fid );
+    end
 end
+
+%% Generate batch run file
+filePaths = dir( fullfile( folderOut, '*.inp' ) );
+filePaths = fullfile( {filePaths.folder}', {filePaths.name}' );
+batchStr = strjoin( strcat( 'Turbsim', {' '}, filePaths ), '\n' );
+fid = fopen( fullfile( folderOut, batchFile ), 'w' );
+fprintf( fid, '%s', batchStr );
 fclose( fid );
