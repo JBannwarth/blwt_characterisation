@@ -34,7 +34,7 @@ function [ UMean, UStd, UTi ] = TurbsimBin2Mat( folderIn, detailFile )
     filenames = replace( filenames, '.inp', '.bin' );
     
     % Remove existing .mat files
-    delete( fullfile( folderOut, '*.mat' ) )
+    delete( fullfile( folderIn, '*.mat' ) )
 
     %% Convert files
     UMean = zeros( length(filenames), 3 );
