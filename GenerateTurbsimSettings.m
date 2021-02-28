@@ -1,5 +1,30 @@
 function [ UMean, UStd, UTi ] = GenerateTurbsimSettings( folderIn, folderOut, options )
-%GENERATETURBSIMSETTINGS Generate Turbsim settings file from given data.
+%GENERATETURBSIMSETTINGS Generate Turbsim settings files from given data.
+%   [UMEAN, USTD, UTI] = GenerateTurbsimSettings( ) generates Turbsim settings for 'data' folder.
+%   [UMEAN, USTD, UTI] = GenerateTurbsimSettings( FOLDERIN ) specifies input folder.
+%   [UMEAN, USTD, UTI] = GenerateTurbsimSettings( FOLDERIN, FOLDEROUT ) specifies output folder.
+%   [UMEAN, USTD, UTI] = GenerateTurbsimSettings( FOLDERIN, FOLDEROUT, OPTIONS ) specifies options.
+%
+%   Inputs:
+%       - folderIn:  folder to load data files from.
+%       - folderOut: folder to output Turbsim settings files to.
+%       - options:   argument value pairs.
+%           - RegenSeed:    whether to regenerate random seeds or not.
+%           - TemplateFile: name of Turbsim template file.
+%           - SeedFile:     name of random seeds file.
+%           - DetailFile:   name of output file containing name of
+%                           generated files and normalised std of wind
+%                           speeds.
+%           - BatchFile:    name of output batch file used to run Turbsim
+%                           on all the generated settings files.
+%           - PatternIn:    specifies the pattern to look for in files
+%                           located in folderIn. Supports * operator. By
+%                           default, 'coarsegrid_center_*_2.thA'. 
+%   Outputs:
+%       - UMean: Mean wind speeds along U, V, and W axes (m/s).
+%       - UStd: Standard deviation of wind speed along U, V, and W axes
+%               (m/s).
+%       - UTi:  Turbulence intensity along U, V, and W axes (%).
 %
 %   Generate Turbsim settings files that can be used to generate wind
 %   profiles with equivalent characteristics to provided wind speed
@@ -20,11 +45,12 @@ function [ UMean, UStd, UTi ] = GenerateTurbsimSettings( folderIn, folderOut, op
         options.SeedFile     (1,:) char {mustBeNonempty} = 'turbsim_seeds.mat'
         options.DetailFile   (1,:) char {mustBeNonempty} = 'turbsim_generation_details.mat'
         options.BatchFile    (1,:) char {mustBeNonempty} = 'batch_run.bat'
+        options.PatternIn    (1,:) char {mustBeNonempty} = 'coarsegrid_center_*_2.thA'
     end
 
     %% Load data and compute necessary values
     % Get files
-    files = dir( fullfile( folderIn, 'coarsegrid_center_*_2.thA' ) );
+    files = dir( fullfile( folderIn, options.PatternIn ) );
     filenames = {files.name}';
     namesNoExt = erase( filenames, '.thA' );
     inputSettings = split( namesNoExt, '_' );
