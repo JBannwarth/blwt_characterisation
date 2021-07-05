@@ -182,3 +182,24 @@ bode( windTFManualW )
 legend( {'$e_U$', '$e_V$', '$e_W$', '$TF_U$', '$TF_V$', '$TF_W$'} )
 
 SetFigProp( figSize, fontSize )
+
+%% Export
+% Get magnitude response
+windTFOut = tf(  tf( db2mag(dcGain)*wCorner, [1 wCorner ] ) );
+[magExp, phaseExp, w] = bode( sys );
+[magFit, phaseFit] = bode( windTFOut, w );
+magExp = squeeze( 20*log10(magExp) );
+phaseExp = squeeze( phaseExp );
+magFit = squeeze( 20*log10(magFit) );
+phaseFit = squeeze( phaseFit );
+
+% Plot to verify
+semilogx( w, magExp, w, magFit )
+axis tight
+
+% Export
+fileOut = 'bode_weight_wind.csv';
+fid = fopen( fileOut, 'w' );
+fprintf( fid, 'w magE phaseE magF phaseF' );
+fclose( fid );
+writematrix( [w magExp phaseExp magFit phaseFit], fileOut, 'WriteMode', 'append', 'Delimiter', ' ' )
